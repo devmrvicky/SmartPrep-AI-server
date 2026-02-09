@@ -3,13 +3,14 @@ import { IUser } from "../types/data";
 
 const userSchema = new Schema<IUser>(
   {
+    userId: { type: String, required: true, unique: true },
     fullname: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, unique: true },
-    password_hash: { type: String, required: true },
-    is_verified: { type: Boolean, default: false },
+    passwordHash: { type: String, required: true },
+    isVerified: { type: Boolean, default: false },
   },
   {
-    timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+    timestamps: { createdAt: true, updatedAt: true },
   },
 );
 

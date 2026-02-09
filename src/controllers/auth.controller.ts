@@ -4,12 +4,6 @@ import otpService from "../services/otp.service";
 import emailService from "../services/email.service";
 import logger from "../config/logger";
 import { AppError } from "../middlewares/error.middleware";
-// import {
-//   ISendOtpData,
-//   IVerifyOtpData,
-//   ICompleteRegistrationData,
-//   LoginData,
-// } from "../models/user.model";
 import { AuthRequest } from "../middlewares/auth.middleware";
 import {
   ICompleteRegistrationData,
@@ -26,29 +20,43 @@ class AuthController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const { fullname, email }: ISendOtpData = req.body;
+      const { fullname, email, purpose }: ISendOtpData = req.body;
 
-      // Check if user already exists
-      const existingUser = await authService.findUserByEmail(email);
-      if (existingUser) {
-        throw new AppError("Email already registered", 409);
+      // Check rate limit for OTP requests (optional, can be implemented with a separate service or middleware)
+
+      // check if user already exists for registration purpose
+      const existingOtp = await otpService.findOTPByEmailAndPurpose(
+        email,
+        purpose,
+      );
+      if (existingOtp) {
+        res.status(200).json({
+          success: true,
+          message:
+            "We've already sent an OTP. if you haven't received it, please check your spam folder or try again after some time.",
+        });
+        return;
       }
 
       // Generate and save OTP
       const otp = otpService.generateOTP();
-      await otpService.saveOTP(email, fullname, otp);
+      const { email: savedEmail, expiresAt } = await otpService.saveOTP(
+        email,
+        fullname,
+        otp,
+      );
 
       // Send OTP via email
-      await emailService.sendOTP(email, fullname, otp);
+      await emailService.sendOTP(savedEmail, fullname, otp);
 
-      logger.info(`OTP sent successfully to ${email}`);
+      logger.info(`OTP sent successfully to ${savedEmail}`);
 
       res.status(200).json({
         success: true,
         message: "OTP sent successfully to your email",
         data: {
-          email,
-          expiryMinutes: 10,
+          email: savedEmail,
+          expiresAt,
         },
       });
     } catch (error) {
@@ -63,9 +71,17 @@ class AuthController {
     next: NextFunction,
   ): Promise<void> {
     try {
-      const { email, otp }: IVerifyOtpData = req.body;
+      const { email, otp, purpose }: IVerifyOtpData = req.body;
 
-      const verification = await otpService.verifyOTP(email, otp);
+      // rate limit OTP verification attempts (optional, can be implemented with a separate service or middleware)
+
+      // check if otp exists in db
+      // const existingOtp = await otpService.findOTPByEmailAndPurpose(email, purpose);
+      // if (!existingOtp) {
+      //   throw new AppError("Invalid or expired OTP", 400);
+      // }
+
+      const verification = await otpService.verifyOTP(email, otp, purpose);
 
       if (!verification.valid) {
         throw new AppError("Invalid or expired OTP", 400);
@@ -73,11 +89,10 @@ class AuthController {
 
       res.status(200).json({
         success: true,
-        message:
-          "OTP verified successfully. You can now complete your registration.",
+        message: "OTP verified successfully",
         data: {
           email,
-          fullname: verification.fullname,
+          fullname: verification.email,
           verified: true,
         },
       });
@@ -109,7 +124,7 @@ class AuthController {
       });
 
       // Generate token
-      const token = authService.generateToken({ userId: user.id, email });
+      const token = authService.generateToken({ userId: user.userId, email });
 
       // Clean up OTPs for this email
       await otpService.deleteOTPsByEmail(email);

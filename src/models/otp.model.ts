@@ -4,16 +4,16 @@ import { IOtpCode } from "../types/data";
 const otpSchema = new Schema<IOtpCode>(
   {
     email: { type: String, required: true, lowercase: true },
-    fullname: { type: String, required: true, trim: true },
-    otp_code: { type: String, required: true },
-    expires_at: { type: Date, required: true },
-    is_used: { type: Boolean, default: false },
+    otpCode: { type: String, required: true },
+    expiresAt: { type: Date, required: true },
+    isUsed: { type: Boolean, default: false },
+    attemps: { type: Number, default: 0 },
   },
   {
-    timestamps: { createdAt: "created_at", updatedAt: false },
+    timestamps: { createdAt: true, updatedAt: true },
   },
 );
 
-otpSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
+otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 export const OtpCodeModel =
   models.OtpCode || model<IOtpCode>("OtpCode", otpSchema);

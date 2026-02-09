@@ -1,27 +1,11 @@
-import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-// import db from "../db/db";
 import config from "../config/config";
 import logger from "../config/logger";
 import { ICreateUserData, IUser, ILoginData, IJwtPayload } from "../types/data";
 import { UserModel } from "../models/user.model";
-// import {
-//   User,
-//   UserResponse,
-//   CreateUserData,
-//   ILoginData,
-// } from "../models/user.model";
+import hashingService from "./hashing.service";
 
 class AuthService {
-  async hashPassword(password: string): Promise<string> {
-    const salt = await bcrypt.genSalt(12);
-    return bcrypt.hash(password, salt);
-  }
-
-  async comparePassword(password: string, hash: string): Promise<boolean> {
-    return bcrypt.compare(password, hash);
-  }
-
   generateToken({ userId, email }: IJwtPayload): string {
     return jwt.sign(
       { userId, email },
@@ -53,13 +37,13 @@ class AuthService {
 
   async createUser(userData: ICreateUserData): Promise<IUser> {
     try {
-      const passwordHash = await this.hashPassword(userData.password);
+      const passwordHash = await hashingService.hash(userData.password);
 
       const newUser = new UserModel({
         fullname: userData.fullname,
         email: userData.email,
-        password_hash: passwordHash,
-        is_verified: false,
+        passwordHash,
+        isVerified: false,
       });
       const savedUser = await newUser.save();
       logger.info(`User created successfully: ${savedUser.email}`);
@@ -81,16 +65,19 @@ class AuthService {
         throw new Error("Invalid email or password");
       }
 
-      const isPasswordValid = await this.comparePassword(
+      const isPasswordValid = await hashingService.compare(
         loginData.password,
-        user.password_hash,
+        user.passwordHash,
       );
 
       if (!isPasswordValid) {
         throw new Error("Invalid email or password");
       }
 
-      const token = this.generateToken({ userId: user.id, email: user.email });
+      const token = this.generateToken({
+        userId: user.userId,
+        email: user.email,
+      });
 
       // const userResponse: IUser = {
       //   id: user.id,
@@ -110,7 +97,7 @@ class AuthService {
   }
 
   sanitizeUser(user: IUser): IUser {
-    const { password_hash, ...userResponse } = user;
+    const { passwordHash, ...userResponse } = user;
     return userResponse as IUser;
   }
 }
